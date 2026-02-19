@@ -460,6 +460,49 @@
 
 <div class="notification" id="notification"></div>
 
+<!-- Task Details Modal -->
+<div class="modal-overlay" id="taskDetailsModal">
+  <div class="modal">
+    <div class="modal-title">➕ <span id="taskModalName"></span></div>
+    <div class="form-row">
+      <label class="form-label">📅 למתי המשימה?</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-sm" style="background:var(--surface2);" onclick="setQuickDate('today')">היום</button>
+        <button class="btn btn-sm" style="background:var(--surface2);" onclick="setQuickDate('tomorrow')">מחר</button>
+        <button class="btn btn-sm" style="background:var(--surface2);" onclick="setQuickDate('week')">סוף השבוע</button>
+      </div>
+      <input type="date" id="modalTaskDate" />
+    </div>
+    <div class="form-row">
+      <label class="form-label">👤 מי קשור למשימה?</label>
+      <input type="text" id="modalTaskPeople" placeholder="לדוגמה: אשתי, הבוס, דני..." />
+    </div>
+    <div class="form-row">
+      <label class="form-label">🔔 מתי להתריע?</label>
+      <select id="modalTaskReminder" onchange="toggleReminderTime(this.value)">
+        <option value="">ללא התראה</option>
+        <option value="same">באותו יום בבוקר (09:00)</option>
+        <option value="day_before">יום לפני בבוקר (09:00)</option>
+        <option value="week_before">שבוע לפני</option>
+        <option value="custom">שעה ספציפית</option>
+      </select>
+      <input type="time" id="modalTaskReminderTime" style="display:none;margin-top:8px;" />
+    </div>
+    <div class="form-row">
+      <label class="form-label">⚡ עדיפות</label>
+      <select id="modalTaskPriority">
+        <option value="high">🔴 גבוהה</option>
+        <option value="medium" selected>🟡 בינונית</option>
+        <option value="low">🟢 נמוכה</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveTaskFromModal()">✅ שמור משימה</button>
+      <button class="btn" style="background:var(--surface2);" onclick="closeModal('taskDetailsModal')">ביטול</button>
+    </div>
+  </div>
+</div>
+
 <!-- Gratitude Modal -->
 <div class="modal-overlay" id="gratitudeModal">
   <div class="modal">
@@ -667,21 +710,91 @@ function switchTab(name, btn) {
 // ══════════════════════════════════════════
 let taskFilter = 'all';
 
+// משימה זמנית בהמתנה לפרטים
+let pendingTask = null;
+
 function addTask() {
   const name = document.getElementById('taskName').value.trim();
   if (!name) { notify('הכנס שם למשימה'); return; }
-  data.tasks.unshift({
-    id: Date.now(), name,
-    duration: document.getElementById('taskDuration').value || '?',
-    priority: document.getElementById('taskPriority').value,
-    category: document.getElementById('taskCategory').value,
-    date: document.getElementById('taskDate').value || new Date().toISOString().split('T')[0],
-    done: false
+  openTaskDetailsModal(name, {
+    duration: document.getElementById('taskDuration').value || '30',
+    category: document.getElementById('taskCategory').value
   });
-  save(); renderTasks(); renderTodayStats();
   document.getElementById('taskName').value = '';
   document.getElementById('taskDuration').value = '';
+}
+
+function openTaskDetailsModal(name, extras) {
+  pendingTask = { name, ...extras };
+  document.getElementById('taskModalName').textContent = name;
+  document.getElementById('modalTaskDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modalTaskPeople').value = '';
+  document.getElementById('modalTaskReminder').value = '';
+  document.getElementById('modalTaskReminderTime').style.display = 'none';
+  document.getElementById('modalTaskPriority').value = 'medium';
+  openModal('taskDetailsModal');
+}
+
+function setQuickDate(when) {
+  const d = new Date();
+  if (when === 'tomorrow') d.setDate(d.getDate() + 1);
+  else if (when === 'week') {
+    const day = d.getDay();
+    const daysUntilFri = day <= 5 ? 5 - day : 6;
+    d.setDate(d.getDate() + daysUntilFri);
+  }
+  document.getElementById('modalTaskDate').value = d.toISOString().split('T')[0];
+}
+
+function toggleReminderTime(val) {
+  document.getElementById('modalTaskReminderTime').style.display = val === 'custom' ? 'block' : 'none';
+}
+
+function saveTaskFromModal() {
+  if (!pendingTask) return;
+  const date = document.getElementById('modalTaskDate').value;
+  const people = document.getElementById('modalTaskPeople').value.trim();
+  const reminder = document.getElementById('modalTaskReminder').value;
+  const reminderTime = document.getElementById('modalTaskReminderTime').value;
+  const priority = document.getElementById('modalTaskPriority').value;
+
+  // חישוב תאריך התראה
+  let alertDate = '';
+  if (reminder === 'same') alertDate = date;
+  else if (reminder === 'day_before') {
+    const d = new Date(date); d.setDate(d.getDate() - 1);
+    alertDate = d.toISOString().split('T')[0];
+  } else if (reminder === 'week_before') {
+    const d = new Date(date); d.setDate(d.getDate() - 7);
+    alertDate = d.toISOString().split('T')[0];
+  }
+
+  data.tasks.unshift({
+    id: Date.now(),
+    name: pendingTask.name,
+    duration: pendingTask.duration || '30',
+    category: pendingTask.category || 'אחר',
+    priority,
+    date,
+    people,
+    reminder,
+    reminderTime,
+    alertDate,
+    done: false
+  });
+
+  pendingTask = null;
+  save(); renderTasks(); renderTodayStats();
+  closeModal('taskDetailsModal');
   notify('✅ משימה נוספה!');
+}
+
+function reminderLabel(r) {
+  if (r === 'same') return 'באותו יום';
+  if (r === 'day_before') return 'יום לפני';
+  if (r === 'week_before') return 'שבוע לפני';
+  if (r === 'custom') return 'שעה ספציפית';
+  return '';
 }
 
 function toggleTask(id) {
@@ -710,6 +823,8 @@ function renderTasks() {
           <span class="badge badge-purple">⏱️ ${t.duration} דק'</span>
           <span class="badge badge-gold">📁 ${t.category}</span>
           ${t.date ? `<span class="badge" style="background:var(--surface);color:var(--muted)">📅 ${t.date}</span>` : ''}
+          ${t.people ? `<span class="badge" style="background:rgba(16,185,129,0.15);color:#6ee7b7">👤 ${t.people}</span>` : ''}
+          ${t.reminder && t.reminder !== '' ? `<span class="badge" style="background:rgba(245,158,11,0.15);color:var(--gold)">🔔 ${reminderLabel(t.reminder)}</span>` : ''}
         </div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteTask(${t.id})">🗑️</button>
@@ -984,17 +1099,32 @@ function stopVoice() {
 }
 
 function processVoice(text) {
-  const t=text.toLowerCase().trim();
-  document.getElementById('transcriptBar').textContent=`"${text}"`;
+  const t = text.trim();
+  document.getElementById('transcriptBar').textContent = `"${t}"`;
 
-  if (t.includes('הוסף משימה') || t.includes('משימה חדשה')) {
-    const name=t.replace('הוסף משימה','').replace('משימה חדשה','').trim();
+  // חילוץ שם משימה — מחפש את הטקסט אחרי מילות המפתח
+  function extractTaskName(raw, keyword) {
+    const idx = raw.indexOf(keyword);
+    if (idx === -1) return '';
+    return raw.substring(idx + keyword.length).trim();
+  }
+
+  if (t.includes('הוסף משימה') || t.includes('משימה חדשה') || t.includes('צריך ל') || t.includes('תזכיר לי ל')) {
+    let name = '';
+    if (t.includes('הוסף משימה')) name = extractTaskName(t, 'הוסף משימה');
+    else if (t.includes('משימה חדשה')) name = extractTaskName(t, 'משימה חדשה');
+    else if (t.includes('תזכיר לי ל')) name = extractTaskName(t, 'תזכיר לי ל');
+    else if (t.includes('צריך ל')) name = extractTaskName(t, 'צריך ל');
+
     if (name) {
-      data.tasks.unshift({ id:Date.now(), name, duration:'30', priority:'medium', category:'אחר', date:new Date().toISOString().split('T')[0], done:false });
-      save(); renderTasks(); renderTodayStats();
-      notify(`✅ נוספה: "${name}"`);
+      document.querySelectorAll('.tab')[1].click();
+      openTaskDetailsModal(name, { duration:'30', category:'אחר' });
+    } else {
+      document.querySelectorAll('.tab')[1].click();
+      document.getElementById('taskName').focus();
+      notify('💬 אמור את שם המשימה');
     }
-  } else if (t.includes('משימות')) {
+  } else if (t.includes('משימות') || t.includes('רשימה')) {
     document.querySelectorAll('.tab')[1].click(); notify('📋 עובר למשימות');
   } else if (t.includes('לוח זמנים') || t.includes('לוז')) {
     document.querySelectorAll('.tab')[2].click(); notify('⏰ עובר ללוז');
@@ -1007,7 +1137,12 @@ function processVoice(text) {
   } else if (t.includes('הכרת תודה') || t.includes('תודה')) {
     openModal('gratitudeModal'); notify('🙏 פותח הכרת תודה');
   } else {
-    notify(`שמעתי: "${text}"`);
+    // כל טקסט שלא זוהה — שאל את המשתמש אם להוסיף כמשימה
+    if (confirm(`להוסיף "${t}" כמשימה חדשה?`)) {
+      data.tasks.unshift({ id:Date.now(), name:t, duration:'30', priority:'medium', category:'אחר', date:new Date().toISOString().split('T')[0], done:false });
+      save(); renderTasks(); renderTodayStats();
+      notify(`✅ נוספה: "${t}"`);
+    }
   }
 }
 
