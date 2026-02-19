@@ -1191,10 +1191,36 @@ function listenForAnswer(onResult) {
   recognition.start();
 }
 
+function speak(text, onDone) {
+  if (!('speechSynthesis' in window)) {
+    if (onDone) setTimeout(onDone, 100);
+    return;
+  }
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'he-IL';
+  u.rate = 1.05;
+  u.pitch = 1;
+
+  let done = false;
+  function finish() {
+    if (!done) { done = true; if (onDone) onDone(); }
+  }
+
+  // fallback — אם הקול לא התחיל תוך 3 שניות ממשיך בלי קול
+  const fallback = setTimeout(finish, 3000);
+  u.onend = () => { clearTimeout(fallback); finish(); };
+  u.onerror = () => { clearTimeout(fallback); finish(); };
+
+  window.speechSynthesis.speak(u);
+}
+
 function askThenListen(question, onAnswer) {
   showVoiceCard(question);
-  // המתן 600ms כדי שהמשתמש יקרא את השאלה, ואז האזן
-  setTimeout(() => listenForAnswer(onAnswer), 600);
+  speak(question, () => {
+    setTimeout(() => listenForAnswer(onAnswer), 300);
+  });
 }
 
 // ── פקודה ראשית ──
@@ -1220,8 +1246,18 @@ function toggleVoice() {
   document.getElementById('voiceLabel').textContent = 'מדבר...';
   document.getElementById('transcriptBar').classList.add('active');
 
-  // פתיח קצר בלבד
-  askThenListen('שלום! מה תרצה לעשות?', handleMainCommand);
+  // פתיחת מנוע הקול של אנדרואיד — חייב לקרות ישירות בתגובה ללחיצה
+  if ('speechSynthesis' in window) {
+    const unlock = new SpeechSynthesisUtterance(' ');
+    unlock.volume = 0;
+    window.speechSynthesis.speak(unlock);
+    setTimeout(() => {
+      window.speechSynthesis.cancel();
+      askThenListen('שלום! מה תרצה לעשות?', handleMainCommand);
+    }, 100);
+  } else {
+    askThenListen('שלום! מה תרצה לעשות?', handleMainCommand);
+  }
 }
 
 function handleMainCommand(text) {
@@ -1358,15 +1394,17 @@ function saveVoiceTask() {
 
 function endVoiceFlow(msg) {
   showVoiceCard(msg);
-  setTimeout(() => {
-    hideVoiceCard();
-    document.getElementById('transcriptBar').classList.remove('active');
-    document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
-    document.getElementById('voiceBtn').textContent = '🎤';
-    voiceFlow = null;
-    voiceData = {};
-    isListening = false;
-  }, 2000);
+  speak(msg, () => {
+    setTimeout(() => {
+      hideVoiceCard();
+      document.getElementById('transcriptBar').classList.remove('active');
+      document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
+      document.getElementById('voiceBtn').textContent = '🎤';
+      voiceFlow = null;
+      voiceData = {};
+      isListening = false;
+    }, 500);
+  });
 }
 
 // ══════════════════════════════════════════
