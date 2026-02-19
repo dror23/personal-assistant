@@ -1144,17 +1144,31 @@ let voiceData = {};
 let isListening = false;
 
 function speak(text, onDone) {
-  if (!('speechSynthesis' in window)) { if (onDone) onDone(); return; }
+  // תמיד קורא onDone — קול הוא בונוס בלבד
+  if (!('speechSynthesis' in window)) {
+    if (onDone) setTimeout(onDone, 100);
+    return;
+  }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'he-IL';
   u.rate = 1.1;
-  const voices = window.speechSynthesis.getVoices();
-  const heVoice = voices.find(v => v.lang && v.lang.startsWith('he'));
-  if (heVoice) u.voice = heVoice;
-  u.onend = () => { if (onDone) setTimeout(onDone, 200); };
-  u.onerror = () => { if (onDone) setTimeout(onDone, 200); };
-  window.speechSynthesis.speak(u);
+  // timeout — אם הקול לא עבד תוך 2 שניות, ממשיך בכל מקרה
+  let done = false;
+  const fallback = setTimeout(() => {
+    if (!done) { done = true; if (onDone) onDone(); }
+  }, 2000);
+  u.onend = () => {
+    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
+  };
+  u.onerror = () => {
+    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
+  };
+  try {
+    window.speechSynthesis.speak(u);
+  } catch(e) {
+    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
+  }
 }
 
 function showVoiceCard(text) {
