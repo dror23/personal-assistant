@@ -1143,34 +1143,6 @@ let voiceFlow = null;
 let voiceData = {};
 let isListening = false;
 
-function speak(text, onDone) {
-  // תמיד קורא onDone — קול הוא בונוס בלבד
-  if (!('speechSynthesis' in window)) {
-    if (onDone) setTimeout(onDone, 100);
-    return;
-  }
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'he-IL';
-  u.rate = 1.1;
-  // timeout — אם הקול לא עבד תוך 2 שניות, ממשיך בכל מקרה
-  let done = false;
-  const fallback = setTimeout(() => {
-    if (!done) { done = true; if (onDone) onDone(); }
-  }, 2000);
-  u.onend = () => {
-    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
-  };
-  u.onerror = () => {
-    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
-  };
-  try {
-    window.speechSynthesis.speak(u);
-  } catch(e) {
-    if (!done) { done = true; clearTimeout(fallback); if (onDone) onDone(); }
-  }
-}
-
 function showVoiceCard(text) {
   document.getElementById('voiceConvCard').classList.add('active');
   document.getElementById('voiceConvText').textContent = text;
@@ -1221,7 +1193,8 @@ function listenForAnswer(onResult) {
 
 function askThenListen(question, onAnswer) {
   showVoiceCard(question);
-  speak(question, () => listenForAnswer(onAnswer));
+  // המתן 600ms כדי שהמשתמש יקרא את השאלה, ואז האזן
+  setTimeout(() => listenForAnswer(onAnswer), 600);
 }
 
 // ── פקודה ראשית ──
@@ -1385,17 +1358,15 @@ function saveVoiceTask() {
 
 function endVoiceFlow(msg) {
   showVoiceCard(msg);
-  speak(msg, () => {
-    setTimeout(() => {
-      hideVoiceCard();
-      document.getElementById('transcriptBar').classList.remove('active');
-      document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
-      document.getElementById('voiceBtn').textContent = '🎤';
-      voiceFlow = null;
-      voiceData = {};
-      isListening = false;
-    }, 1000);
-  });
+  setTimeout(() => {
+    hideVoiceCard();
+    document.getElementById('transcriptBar').classList.remove('active');
+    document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
+    document.getElementById('voiceBtn').textContent = '🎤';
+    voiceFlow = null;
+    voiceData = {};
+    isListening = false;
+  }, 2000);
 }
 
 // ══════════════════════════════════════════
