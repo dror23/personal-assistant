@@ -227,6 +227,79 @@
   ::-webkit-scrollbar { width:5px; }
   ::-webkit-scrollbar-track { background:var(--bg); }
   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* ── כרטיס שיחה קולית ── */
+  .voice-conv-card {
+    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--surface2), #1e1b4b);
+    border: 1px solid var(--accent); border-radius: 20px;
+    padding: 18px 24px; max-width: 340px; width: 88%;
+    z-index: 150; display: none; flex-direction: column;
+    align-items: center; gap: 10px;
+    box-shadow: 0 0 40px rgba(99,102,241,0.3); text-align: center;
+  }
+  .voice-conv-card.active { display: flex; animation: fadeIn 0.3s ease; }
+  .voice-conv-waves { display:flex; gap:4px; align-items:center; height:24px; }
+  .voice-conv-waves span { width:4px; background:var(--accent2); border-radius:4px; animation:wave 1s infinite ease-in-out; }
+  .voice-conv-waves span:nth-child(1){height:8px;animation-delay:0s}
+  .voice-conv-waves span:nth-child(2){height:16px;animation-delay:0.15s}
+  .voice-conv-waves span:nth-child(3){height:24px;animation-delay:0.3s}
+  .voice-conv-waves span:nth-child(4){height:16px;animation-delay:0.45s}
+  .voice-conv-waves span:nth-child(5){height:8px;animation-delay:0.6s}
+  @keyframes wave { 0%,100%{transform:scaleY(0.5);opacity:0.5} 50%{transform:scaleY(1);opacity:1} }
+  .voice-conv-text { font-size:16px; font-weight:600; color:var(--text); line-height:1.5; }
+  .voice-conv-hint { font-size:12px; color:var(--muted); }
+  .voice-conv-card {
+    position: fixed;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--surface2), #1e1b4b);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 18px 24px;
+    max-width: 340px;
+    width: 88%;
+    z-index: 150;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 0 40px rgba(99,102,241,0.3);
+    text-align: center;
+  }
+  .voice-conv-card.active { display: flex; animation: fadeIn 0.3s ease; }
+  .voice-conv-waves {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    height: 24px;
+  }
+  .voice-conv-waves span {
+    width: 4px;
+    background: var(--accent2);
+    border-radius: 4px;
+    animation: wave 1s infinite ease-in-out;
+  }
+  .voice-conv-waves span:nth-child(1) { height: 8px;  animation-delay: 0s; }
+  .voice-conv-waves span:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+  .voice-conv-waves span:nth-child(3) { height: 24px; animation-delay: 0.3s; }
+  .voice-conv-waves span:nth-child(4) { height: 16px; animation-delay: 0.45s; }
+  .voice-conv-waves span:nth-child(5) { height: 8px;  animation-delay: 0.6s; }
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+  .voice-conv-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .voice-conv-hint {
+    font-size: 12px;
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -449,6 +522,15 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- כרטיס שיחה קולית -->
+<div class="voice-conv-card" id="voiceConvCard">
+  <div class="voice-conv-waves">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+  <div class="voice-conv-text" id="voiceConvText">מאזין...</div>
+  <div class="voice-conv-hint">לחץ שוב על המיקרופון לעצירה</div>
 </div>
 
 <!-- Voice FAB -->
@@ -1053,97 +1135,263 @@ function saveWeeklyReview() {
 }
 
 // ══════════════════════════════════════════
-//  VOICE (Android Chrome)
+//  מערכת שיחה קולית אוטומטית
 // ══════════════════════════════════════════
-let recognition=null, listening=false;
 
-function toggleVoice() {
-  const hasSR = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
-  if (!hasSR) { notify('זיהוי קול זמין ב-Chrome בלבד'); return; }
-  listening ? stopVoice() : startVoice();
+let recognition = null;
+let voiceFlow = null; // שלב נוכחי בשיחה
+let voiceData = {};   // נתונים שנאספו בשיחה
+
+// טקסט לדיבור
+function speak(text, onDone) {
+  if (!('speechSynthesis' in window)) { if (onDone) onDone(); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'he-IL';
+  u.rate = 1.05;
+  u.pitch = 1;
+  // מנסה למצוא קול עברי
+  const voices = window.speechSynthesis.getVoices();
+  const heVoice = voices.find(v => v.lang.startsWith('he'));
+  if (heVoice) u.voice = heVoice;
+  u.onend = () => { if (onDone) onDone(); };
+  window.speechSynthesis.speak(u);
 }
 
-function startVoice() {
+// הצגת הודעה בכרטיס השיחה
+function showVoiceCard(text) {
+  document.getElementById('voiceConvCard').classList.add('active');
+  document.getElementById('voiceConvText').textContent = text;
+}
+
+function hideVoiceCard() {
+  document.getElementById('voiceConvCard').classList.remove('active');
+}
+
+// האזנה לתשובה
+function listenForAnswer(onResult) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
   recognition = new SR();
   recognition.lang = 'he-IL';
   recognition.continuous = false;
   recognition.interimResults = true;
 
-  recognition.onstart = () => {
-    listening=true;
-    document.getElementById('voiceBtn').classList.add('listening');
-    document.getElementById('voiceBtn').textContent='🔴';
-    document.getElementById('voiceLabel').textContent='מאזין...';
-    document.getElementById('transcriptBar').classList.add('active');
-    document.getElementById('transcriptBar').textContent='🎤 מאזין...';
-  };
+  document.getElementById('voiceBtn').classList.add('listening');
+  document.getElementById('voiceBtn').textContent = '🔴';
 
   recognition.onresult = e => {
-    let t=''; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript;
-    document.getElementById('transcriptBar').textContent=t;
-    if (e.results[e.results.length-1].isFinal) processVoice(t);
+    let t = '';
+    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+    document.getElementById('transcriptBar').textContent = t;
+    document.getElementById('transcriptBar').classList.add('active');
+    if (e.results[e.results.length - 1].isFinal) {
+      recognition.stop();
+      onResult(t.trim());
+    }
   };
 
-  recognition.onend = () => stopVoice();
-  recognition.onerror = () => { stopVoice(); notify('שגיאה — נסה שוב'); };
+  recognition.onend = () => {
+    document.getElementById('voiceBtn').classList.remove('listening');
+    document.getElementById('voiceBtn').textContent = '🎤';
+  };
+
+  recognition.onerror = () => {
+    document.getElementById('voiceBtn').classList.remove('listening');
+    document.getElementById('voiceBtn').textContent = '🎤';
+    showVoiceCard('לא שמעתי... לחץ שוב על המיקרופון');
+  };
+
   recognition.start();
 }
 
-function stopVoice() {
-  listening=false; if(recognition) recognition.stop();
-  document.getElementById('voiceBtn').classList.remove('listening');
-  document.getElementById('voiceBtn').textContent='🎤';
-  document.getElementById('voiceLabel').textContent='לחץ לדיבור';
-  setTimeout(()=>document.getElementById('transcriptBar').classList.remove('active'), 2500);
+// שאלה → המתנה → המשך
+function askThenListen(question, onAnswer) {
+  showVoiceCard(question);
+  speak(question, () => {
+    setTimeout(() => listenForAnswer(onAnswer), 300);
+  });
 }
 
-function processVoice(text) {
-  const t = text.trim();
-  document.getElementById('transcriptBar').textContent = `"${t}"`;
+// ── זרימת השיחה הראשית ──
+function toggleVoice() {
+  const hasSR = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+  if (!hasSR) { notify('זיהוי קול זמין רק בדפדפן כרום'); return; }
 
-  // חילוץ שם משימה — מחפש את הטקסט אחרי מילות המפתח
-  function extractTaskName(raw, keyword) {
-    const idx = raw.indexOf(keyword);
-    if (idx === -1) return '';
-    return raw.substring(idx + keyword.length).trim();
+  if (voiceFlow) {
+    // עצור שיחה פעילה
+    window.speechSynthesis.cancel();
+    if (recognition) recognition.stop();
+    voiceFlow = null;
+    voiceData = {};
+    hideVoiceCard();
+    document.getElementById('voiceBtn').textContent = '🎤';
+    document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
+    document.getElementById('transcriptBar').classList.remove('active');
+    return;
   }
 
-  if (t.includes('הוסף משימה') || t.includes('משימה חדשה') || t.includes('צריך ל') || t.includes('תזכיר לי ל')) {
+  // התחל שיחה
+  voiceFlow = 'start';
+  voiceData = {};
+  document.getElementById('voiceLabel').textContent = 'מדבר...';
+  document.getElementById('transcriptBar').classList.add('active');
+
+  askThenListen('שלום! מה תרצה לעשות? אפשר לומר — משימה חדשה, תזכורת, דוח, מדיטציה', handleMainCommand);
+}
+
+function handleMainCommand(text) {
+  const t = text;
+
+  if (t.includes('משימה') || t.includes('מטלה') || t.includes('צריך') || t.includes('להוסיף')) {
+    // בדוק אם שם המשימה כבר נאמר
     let name = '';
-    if (t.includes('הוסף משימה')) name = extractTaskName(t, 'הוסף משימה');
-    else if (t.includes('משימה חדשה')) name = extractTaskName(t, 'משימה חדשה');
-    else if (t.includes('תזכיר לי ל')) name = extractTaskName(t, 'תזכיר לי ל');
-    else if (t.includes('צריך ל')) name = extractTaskName(t, 'צריך ל');
+    if (t.includes('משימה חדשה')) name = t.replace('משימה חדשה','').trim();
+    else if (t.includes('הוסף משימה')) name = t.replace('הוסף משימה','').trim();
+    else if (t.includes('צריך ל')) name = t.replace('צריך ל','').trim();
 
-    if (name) {
-      document.querySelectorAll('.tab')[1].click();
-      openTaskDetailsModal(name, { duration:'30', category:'אחר' });
+    if (name && name.length > 1) {
+      voiceData.name = name;
+      askAboutDate();
     } else {
-      document.querySelectorAll('.tab')[1].click();
-      document.getElementById('taskName').focus();
-      notify('💬 אמור את שם המשימה');
+      askThenListen('מה שם המשימה?', ans => {
+        voiceData.name = ans;
+        askAboutDate();
+      });
     }
-  } else if (t.includes('משימות') || t.includes('רשימה')) {
-    document.querySelectorAll('.tab')[1].click(); notify('📋 עובר למשימות');
-  } else if (t.includes('לוח זמנים') || t.includes('לוז')) {
-    document.querySelectorAll('.tab')[2].click(); notify('⏰ עובר ללוז');
+
   } else if (t.includes('תזכורת')) {
-    document.querySelectorAll('.tab')[3].click(); notify('🔔 עובר לתזכורות');
-  } else if (t.includes('מדיטציה') || t.includes('דמיון')) {
-    document.querySelectorAll('.tab')[4].click(); notify('🧘 עובר למדיטציה');
+    document.querySelectorAll('.tab')[3].click();
+    endVoiceFlow('עובר לתזכורות');
+
   } else if (t.includes('דוח')) {
-    document.querySelectorAll('.tab')[5].click(); notify('📊 עובר לדוח');
+    document.querySelectorAll('.tab')[5].click();
+    endVoiceFlow('מציג את הדוח השבועי');
+
+  } else if (t.includes('מדיטציה') || t.includes('דמיון')) {
+    document.querySelectorAll('.tab')[4].click();
+    endVoiceFlow('נפתח מסך המדיטציה');
+
   } else if (t.includes('הכרת תודה') || t.includes('תודה')) {
-    openModal('gratitudeModal'); notify('🙏 פותח הכרת תודה');
+    openModal('gratitudeModal');
+    endVoiceFlow('פותח הכרת תודה');
+
   } else {
-    // כל טקסט שלא זוהה — שאל את המשתמש אם להוסיף כמשימה
-    if (confirm(`להוסיף "${t}" כמשימה חדשה?`)) {
-      data.tasks.unshift({ id:Date.now(), name:t, duration:'30', priority:'medium', category:'אחר', date:new Date().toISOString().split('T')[0], done:false });
-      save(); renderTasks(); renderTodayStats();
-      notify(`✅ נוספה: "${t}"`);
-    }
+    askThenListen('לא הבנתי. אמור — משימה חדשה, תזכורת, דוח, או מדיטציה', handleMainCommand);
   }
+}
+
+function askAboutDate() {
+  askThenListen('למתי המשימה? אמור — היום, מחר, יום ספציפי, או דלג', ans => {
+    const a = ans;
+    const d = new Date();
+    if (a.includes('היום') || a.includes('דלג') || a.includes('לא יודע')) {
+      voiceData.date = d.toISOString().split('T')[0];
+    } else if (a.includes('מחר')) {
+      d.setDate(d.getDate() + 1);
+      voiceData.date = d.toISOString().split('T')[0];
+    } else {
+      // נסה לזהות יום בשבוע
+      const days = { 'ראשון':0,'שני':1,'שלישי':2,'רביעי':3,'חמישי':4,'שישי':5,'שבת':6 };
+      const foundDay = Object.keys(days).find(day => a.includes(day));
+      if (foundDay) {
+        const today = d.getDay();
+        const target = days[foundDay];
+        const diff = (target - today + 7) % 7 || 7;
+        d.setDate(d.getDate() + diff);
+        voiceData.date = d.toISOString().split('T')[0];
+      } else {
+        voiceData.date = new Date().toISOString().split('T')[0];
+      }
+    }
+    askAboutPeople();
+  });
+}
+
+function askAboutPeople() {
+  askThenListen('מי קשור למשימה? אמור שם או — אף אחד', ans => {
+    const a = ans;
+    if (a.includes('אף אחד') || a.includes('לא') || a.includes('דלג')) {
+      voiceData.people = '';
+    } else {
+      voiceData.people = a;
+    }
+    askAboutReminder();
+  });
+}
+
+function askAboutReminder() {
+  askThenListen('מתי להתריע? אמור — באותו יום, יום לפני, שבוע לפני, או ללא התראה', ans => {
+    const a = ans;
+    if (a.includes('יום לפני') || a.includes('יום קודם')) voiceData.reminder = 'day_before';
+    else if (a.includes('שבוע')) voiceData.reminder = 'week_before';
+    else if (a.includes('אותו יום') || a.includes('ביום')) voiceData.reminder = 'same';
+    else voiceData.reminder = '';
+    confirmTask();
+  });
+}
+
+function confirmTask() {
+  const dateStr = voiceData.date ? ` ל-${voiceData.date}` : '';
+  const peopleStr = voiceData.people ? `, עם ${voiceData.people}` : '';
+  const msg = `אני שומר — ${voiceData.name}${dateStr}${peopleStr}. נכון?`;
+
+  askThenListen(msg, ans => {
+    if (ans.includes('כן') || ans.includes('נכון') || ans.includes('אישור') || ans.includes('בסדר') || ans.includes('יאללה')) {
+      saveVoiceTask();
+    } else {
+      askThenListen('רוצה לשנות את שם המשימה?', newName => {
+        if (!newName.includes('לא')) voiceData.name = newName;
+        saveVoiceTask();
+      });
+    }
+  });
+}
+
+function saveVoiceTask() {
+  // חישוב תאריך התראה
+  let alertDate = '';
+  if (voiceData.reminder === 'same') alertDate = voiceData.date;
+  else if (voiceData.reminder === 'day_before') {
+    const d = new Date(voiceData.date); d.setDate(d.getDate() - 1);
+    alertDate = d.toISOString().split('T')[0];
+  } else if (voiceData.reminder === 'week_before') {
+    const d = new Date(voiceData.date); d.setDate(d.getDate() - 7);
+    alertDate = d.toISOString().split('T')[0];
+  }
+
+  data.tasks.unshift({
+    id: Date.now(),
+    name: voiceData.name,
+    duration: '30',
+    category: 'אחר',
+    priority: 'medium',
+    date: voiceData.date,
+    people: voiceData.people || '',
+    reminder: voiceData.reminder || '',
+    alertDate,
+    done: false
+  });
+
+  save();
+  document.querySelectorAll('.tab')[1].click();
+  renderTasks();
+  renderTodayStats();
+
+  endVoiceFlow(`מעולה! המשימה "${voiceData.name}" נשמרה`);
+}
+
+function endVoiceFlow(msg) {
+  showVoiceCard(msg);
+  speak(msg, () => {
+    setTimeout(() => {
+      hideVoiceCard();
+      document.getElementById('transcriptBar').classList.remove('active');
+      document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
+      voiceFlow = null;
+      voiceData = {};
+    }, 1500);
+  });
 }
 
 // ══════════════════════════════════════════
