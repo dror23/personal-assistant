@@ -1139,26 +1139,24 @@ function saveWeeklyReview() {
 // ══════════════════════════════════════════
 
 let recognition = null;
-let voiceFlow = null; // שלב נוכחי בשיחה
-let voiceData = {};   // נתונים שנאספו בשיחה
+let voiceFlow = null;
+let voiceData = {};
+let isListening = false;
 
-// טקסט לדיבור
 function speak(text, onDone) {
   if (!('speechSynthesis' in window)) { if (onDone) onDone(); return; }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'he-IL';
-  u.rate = 1.05;
-  u.pitch = 1;
-  // מנסה למצוא קול עברי
+  u.rate = 1.1;
   const voices = window.speechSynthesis.getVoices();
-  const heVoice = voices.find(v => v.lang.startsWith('he'));
+  const heVoice = voices.find(v => v.lang && v.lang.startsWith('he'));
   if (heVoice) u.voice = heVoice;
-  u.onend = () => { if (onDone) onDone(); };
+  u.onend = () => { if (onDone) setTimeout(onDone, 200); };
+  u.onerror = () => { if (onDone) setTimeout(onDone, 200); };
   window.speechSynthesis.speak(u);
 }
 
-// הצגת הודעה בכרטיס השיחה
 function showVoiceCard(text) {
   document.getElementById('voiceConvCard').classList.add('active');
   document.getElementById('voiceConvText').textContent = text;
@@ -1168,62 +1166,61 @@ function hideVoiceCard() {
   document.getElementById('voiceConvCard').classList.remove('active');
 }
 
-// האזנה לתשובה
 function listenForAnswer(onResult) {
+  if (isListening) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
+
   recognition = new SR();
   recognition.lang = 'he-IL';
   recognition.continuous = false;
-  recognition.interimResults = true;
+  recognition.interimResults = false; // רק תוצאה סופית — ללא השהיה מיותרת
 
+  isListening = true;
   document.getElementById('voiceBtn').classList.add('listening');
   document.getElementById('voiceBtn').textContent = '🔴';
 
   recognition.onresult = e => {
-    let t = '';
-    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-    document.getElementById('transcriptBar').textContent = t;
+    const text = e.results[0][0].transcript.trim();
+    document.getElementById('transcriptBar').textContent = text;
     document.getElementById('transcriptBar').classList.add('active');
-    if (e.results[e.results.length - 1].isFinal) {
-      recognition.stop();
-      onResult(t.trim());
-    }
+    isListening = false;
+    recognition.stop();
+    if (onResult) onResult(text);
   };
 
   recognition.onend = () => {
+    isListening = false;
     document.getElementById('voiceBtn').classList.remove('listening');
     document.getElementById('voiceBtn').textContent = '🎤';
   };
 
   recognition.onerror = () => {
+    isListening = false;
     document.getElementById('voiceBtn').classList.remove('listening');
     document.getElementById('voiceBtn').textContent = '🎤';
-    showVoiceCard('לא שמעתי... לחץ שוב על המיקרופון');
+    showVoiceCard('לא שמעתי, נסה שוב');
   };
 
   recognition.start();
 }
 
-// שאלה → המתנה → המשך
 function askThenListen(question, onAnswer) {
   showVoiceCard(question);
-  speak(question, () => {
-    setTimeout(() => listenForAnswer(onAnswer), 300);
-  });
+  speak(question, () => listenForAnswer(onAnswer));
 }
 
-// ── זרימת השיחה הראשית ──
+// ── פקודה ראשית ──
 function toggleVoice() {
   const hasSR = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
   if (!hasSR) { notify('זיהוי קול זמין רק בדפדפן כרום'); return; }
 
   if (voiceFlow) {
-    // עצור שיחה פעילה
     window.speechSynthesis.cancel();
     if (recognition) recognition.stop();
     voiceFlow = null;
     voiceData = {};
+    isListening = false;
     hideVoiceCard();
     document.getElementById('voiceBtn').textContent = '🎤';
     document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
@@ -1231,24 +1228,28 @@ function toggleVoice() {
     return;
   }
 
-  // התחל שיחה
-  voiceFlow = 'start';
+  voiceFlow = 'active';
   voiceData = {};
   document.getElementById('voiceLabel').textContent = 'מדבר...';
   document.getElementById('transcriptBar').classList.add('active');
 
-  askThenListen('שלום! מה תרצה לעשות? אפשר לומר — משימה חדשה, תזכורת, דוח, מדיטציה', handleMainCommand);
+  // פתיח קצר בלבד
+  askThenListen('שלום! מה תרצה לעשות?', handleMainCommand);
 }
 
 function handleMainCommand(text) {
+  // וודא שאנחנו עדיין בתוך זרימה פעילה
+  if (!voiceFlow) return;
+
   const t = text;
 
-  if (t.includes('משימה') || t.includes('מטלה') || t.includes('צריך') || t.includes('להוסיף')) {
-    // בדוק אם שם המשימה כבר נאמר
-    let name = '';
-    if (t.includes('משימה חדשה')) name = t.replace('משימה חדשה','').trim();
-    else if (t.includes('הוסף משימה')) name = t.replace('הוסף משימה','').trim();
-    else if (t.includes('צריך ל')) name = t.replace('צריך ל','').trim();
+  if (t.includes('משימה') || t.includes('מטלה') || t.includes('צריך') || t.includes('להוסיף') || t.includes('הוסף')) {
+    // נסה לחלץ שם משימה מהמשפט עצמו
+    let name = t
+      .replace('הוסף משימה','').replace('משימה חדשה','')
+      .replace('צריך ל','').replace('תזכיר לי ל','')
+      .replace('משימה','').replace('הוסף','')
+      .trim();
 
     if (name && name.length > 1) {
       voiceData.name = name;
@@ -1266,82 +1267,77 @@ function handleMainCommand(text) {
 
   } else if (t.includes('דוח')) {
     document.querySelectorAll('.tab')[5].click();
-    endVoiceFlow('מציג את הדוח השבועי');
+    endVoiceFlow('מציג דוח שבועי');
 
   } else if (t.includes('מדיטציה') || t.includes('דמיון')) {
     document.querySelectorAll('.tab')[4].click();
     endVoiceFlow('נפתח מסך המדיטציה');
 
-  } else if (t.includes('הכרת תודה') || t.includes('תודה')) {
+  } else if (t.includes('תודה') || t.includes('הכרת תודה')) {
     openModal('gratitudeModal');
     endVoiceFlow('פותח הכרת תודה');
 
   } else {
-    askThenListen('לא הבנתי. אמור — משימה חדשה, תזכורת, דוח, או מדיטציה', handleMainCommand);
+    askThenListen('לא הבנתי. אמור משימה, תזכורת, דוח או מדיטציה', handleMainCommand);
   }
 }
 
 function askAboutDate() {
-  askThenListen('למתי המשימה? אמור — היום, מחר, יום ספציפי, או דלג', ans => {
-    const a = ans;
+  if (!voiceFlow) return;
+  askThenListen('למתי? היום, מחר, או יום בשבוע?', ans => {
+    if (!voiceFlow) return;
     const d = new Date();
-    if (a.includes('היום') || a.includes('דלג') || a.includes('לא יודע')) {
-      voiceData.date = d.toISOString().split('T')[0];
-    } else if (a.includes('מחר')) {
+    const a = ans;
+    if (a.includes('מחר')) {
       d.setDate(d.getDate() + 1);
-      voiceData.date = d.toISOString().split('T')[0];
-    } else {
-      // נסה לזהות יום בשבוע
+    } else if (!a.includes('היום')) {
       const days = { 'ראשון':0,'שני':1,'שלישי':2,'רביעי':3,'חמישי':4,'שישי':5,'שבת':6 };
       const foundDay = Object.keys(days).find(day => a.includes(day));
       if (foundDay) {
-        const today = d.getDay();
-        const target = days[foundDay];
-        const diff = (target - today + 7) % 7 || 7;
+        const diff = (days[foundDay] - d.getDay() + 7) % 7 || 7;
         d.setDate(d.getDate() + diff);
-        voiceData.date = d.toISOString().split('T')[0];
-      } else {
-        voiceData.date = new Date().toISOString().split('T')[0];
       }
     }
+    voiceData.date = d.toISOString().split('T')[0];
     askAboutPeople();
   });
 }
 
 function askAboutPeople() {
-  askThenListen('מי קשור למשימה? אמור שם או — אף אחד', ans => {
+  if (!voiceFlow) return;
+  askThenListen('מי קשור? אמור שם או — אף אחד', ans => {
+    if (!voiceFlow) return;
     const a = ans;
-    if (a.includes('אף אחד') || a.includes('לא') || a.includes('דלג')) {
-      voiceData.people = '';
-    } else {
-      voiceData.people = a;
-    }
+    voiceData.people = (a.includes('אף אחד') || a.includes('לא') || a.includes('דלג') || a.includes('ללא')) ? '' : a;
     askAboutReminder();
   });
 }
 
 function askAboutReminder() {
-  askThenListen('מתי להתריע? אמור — באותו יום, יום לפני, שבוע לפני, או ללא התראה', ans => {
+  if (!voiceFlow) return;
+  askThenListen('מתי להתריע? אותו יום, יום לפני, שבוע לפני, או ללא', ans => {
+    if (!voiceFlow) return;
     const a = ans;
     if (a.includes('יום לפני') || a.includes('יום קודם')) voiceData.reminder = 'day_before';
     else if (a.includes('שבוע')) voiceData.reminder = 'week_before';
-    else if (a.includes('אותו יום') || a.includes('ביום')) voiceData.reminder = 'same';
+    else if (a.includes('אותו') || a.includes('ביום') || a.includes('אותה')) voiceData.reminder = 'same';
     else voiceData.reminder = '';
     confirmTask();
   });
 }
 
 function confirmTask() {
-  const dateStr = voiceData.date ? ` ל-${voiceData.date}` : '';
+  if (!voiceFlow) return;
   const peopleStr = voiceData.people ? `, עם ${voiceData.people}` : '';
-  const msg = `אני שומר — ${voiceData.name}${dateStr}${peopleStr}. נכון?`;
-
+  const msg = `שומר — ${voiceData.name}${peopleStr}. נכון?`;
   askThenListen(msg, ans => {
-    if (ans.includes('כן') || ans.includes('נכון') || ans.includes('אישור') || ans.includes('בסדר') || ans.includes('יאללה')) {
+    if (!voiceFlow) return;
+    if (ans.includes('כן') || ans.includes('נכון') || ans.includes('בסדר') || ans.includes('יאללה') || ans.includes('אישור')) {
       saveVoiceTask();
     } else {
-      askThenListen('רוצה לשנות את שם המשימה?', newName => {
-        if (!newName.includes('לא')) voiceData.name = newName;
+      askThenListen('מה השם הנכון?', newName => {
+        if (!voiceFlow) return;
+        voiceData.name = newName;
         saveVoiceTask();
       });
     }
@@ -1349,7 +1345,7 @@ function confirmTask() {
 }
 
 function saveVoiceTask() {
-  // חישוב תאריך התראה
+  if (!voiceFlow) return;
   let alertDate = '';
   if (voiceData.reminder === 'same') alertDate = voiceData.date;
   else if (voiceData.reminder === 'day_before') {
@@ -1361,24 +1357,16 @@ function saveVoiceTask() {
   }
 
   data.tasks.unshift({
-    id: Date.now(),
-    name: voiceData.name,
-    duration: '30',
-    category: 'אחר',
-    priority: 'medium',
-    date: voiceData.date,
-    people: voiceData.people || '',
-    reminder: voiceData.reminder || '',
-    alertDate,
-    done: false
+    id: Date.now(), name: voiceData.name,
+    duration: '30', category: 'אחר', priority: 'medium',
+    date: voiceData.date, people: voiceData.people || '',
+    reminder: voiceData.reminder || '', alertDate, done: false
   });
 
   save();
   document.querySelectorAll('.tab')[1].click();
-  renderTasks();
-  renderTodayStats();
-
-  endVoiceFlow(`מעולה! המשימה "${voiceData.name}" נשמרה`);
+  renderTasks(); renderTodayStats();
+  endVoiceFlow(`מעולה! "${voiceData.name}" נשמרה`);
 }
 
 function endVoiceFlow(msg) {
@@ -1388,9 +1376,11 @@ function endVoiceFlow(msg) {
       hideVoiceCard();
       document.getElementById('transcriptBar').classList.remove('active');
       document.getElementById('voiceLabel').textContent = 'לחץ לדיבור';
+      document.getElementById('voiceBtn').textContent = '🎤';
       voiceFlow = null;
       voiceData = {};
-    }, 1500);
+      isListening = false;
+    }, 1000);
   });
 }
 
