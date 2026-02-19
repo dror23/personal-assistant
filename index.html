@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#6366f1">
+<link rel="manifest" href="manifest.json">
+<title>עוזר אישי חכם</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&family=Frank+Ruhl+Libre:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1a2235;
+    --border: #1e293b; --accent: #6366f1; --accent2: #a78bfa;
+    --gold: #f59e0b; --green: #10b981; --red: #ef4444;
+    --text: #e2e8f0; --muted: #64748b; --glow: rgba(99,102,241,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 60%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── INSTALL BANNER ── */
+  .install-banner {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 14px; padding: 12px 18px;
+    z-index: 500; display: none; align-items: center; gap: 10px;
+    max-width: 340px; width: 92%; box-shadow: 0 8px 30px rgba(99,102,241,0.4);
+    animation: slideDown 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .install-banner.show { display: flex; }
+  @keyframes slideDown { from { transform: translateX(-50%) translateY(-60px); opacity:0; } to { transform: translateX(-50%) translateY(0); opacity:1; } }
+  .install-banner span { flex:1; font-size:13px; font-weight:600; color:#fff; }
+  .install-banner button { border:none; border-radius:8px; padding:6px 14px; font-family:'Heebo',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  .install-btn-yes { background:#fff; color: var(--accent); }
+  .install-btn-no { background: rgba(255,255,255,0.2); color:#fff; }
+
+  .app { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:0 16px 110px; }
+
+  /* ── HEADER ── */
+  .header {
+    padding: 20px 0 14px; display:flex; align-items:center;
+    justify-content:space-between; border-bottom:1px solid var(--border); margin-bottom:20px;
+  }
+  .header-title {
+    font-family:'Frank Ruhl Libre',serif; font-size:26px; font-weight:700;
+    background: linear-gradient(135deg,#e2e8f0,#a78bfa);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .header-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+  .date-display { font-size:13px; color:var(--muted); text-align:left; }
+  .date-display strong { color:var(--accent2); display:block; font-size:15px; }
+
+  /* ── BACKUP BUTTONS ── */
+  .backup-bar {
+    display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .backup-bar button {
+    flex:1; min-width:120px; padding:9px 12px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); border-radius:10px;
+    font-family:'Heebo',sans-serif; font-size:13px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+    transition: all 0.2s;
+  }
+  .backup-bar button:hover { border-color:var(--accent); background:var(--surface2); }
+
+  /* ── TABS ── */
+  .tabs {
+    display:flex; gap:4px; background:var(--surface); border-radius:12px;
+    padding:4px; margin-bottom:20px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab {
+    flex:1; min-width:70px; padding:9px 6px; border:none; background:transparent;
+    color:var(--muted); cursor:pointer; border-radius:8px;
+    font-family:'Heebo',sans-serif; font-size:12px; font-weight:500;
+    transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .tab .tab-icon { font-size:17px; }
+  .tab.active { background:var(--surface2); color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+
+  .panel { display:none; }
+  .panel.active { display:block; animation:fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+
+  /* ── CARDS ── */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px; }
+  .card-title { font-size:15px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+
+  /* ── INPUTS ── */
+  input[type="text"],input[type="time"],input[type="date"],select,textarea {
+    background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 13px; color:var(--text); font-family:'Heebo',sans-serif;
+    font-size:14px; outline:none; transition:border-color 0.2s; width:100%;
+  }
+  input:focus,select:focus,textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+  textarea { resize:vertical; min-height:80px; }
+  .form-row { margin-bottom:12px; }
+  .form-label { font-size:12px; color:var(--muted); margin-bottom:5px; display:block; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+
+  /* ── BUTTONS ── */
+  .btn { padding:10px 16px; border:none; border-radius:10px; cursor:pointer; font-family:'Heebo',sans-serif; font-size:14px; font-weight:600; transition:all 0.2s; white-space:nowrap; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-success { background:var(--green); color:#fff; }
+  .btn-danger { background:var(--red); color:#fff; font-size:12px; padding:6px 11px; }
+  .btn-gold { background:var(--gold); color:#1a1a1a; }
+  .btn-sm { padding:6px 12px; font-size:12px; }
+
+  /* ── TASKS ── */
+  .task-item { display:flex; align-items:flex-start; gap:10px; padding:13px; background:var(--surface2); border-radius:12px; margin-bottom:8px; border:1px solid var(--border); transition:all 0.2s; }
+  .task-item.done { opacity:0.5; }
+  .task-item.done .task-name { text-decoration:line-through; }
+  .task-check { width:22px; height:22px; min-width:22px; border-radius:6px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; font-size:13px; margin-top:2px; }
+  .task-check.checked { background:var(--green); border-color:var(--green); }
+  .task-info { flex:1; min-width:0; }
+  .task-name { font-size:14px; font-weight:500; margin-bottom:4px; }
+  .task-meta { display:flex; flex-wrap:wrap; gap:6px; }
+  .badge { padding:2px 7px; border-radius:6px; font-size:11px; font-weight:600; }
+  .badge-purple { background:rgba(99,102,241,0.2); color:var(--accent2); }
+  .badge-gold { background:rgba(245,158,11,0.2); color:var(--gold); }
+  .badge-green { background:rgba(16,185,129,0.2); color:var(--green); }
+  .priority-high { border-right:3px solid var(--red); }
+  .priority-medium { border-right:3px solid var(--gold); }
+  .priority-low { border-right:3px solid var(--green); }
+
+  /* ── SCHEDULE ── */
+  .schedule-slot { display:flex; gap:10px; padding:12px; background:var(--surface2); border-radius:10px; margin-bottom:8px; border:1px solid var(--border); align-items:center; }
+  .slot-time { font-size:12px; color:var(--accent2); font-weight:700; min-width:72px; text-align:center; }
+  .slot-bar { width:3px; height:36px; background:linear-gradient(to bottom,var(--accent),var(--accent2)); border-radius:4px; }
+
+  /* ── REMINDERS ── */
+  .reminder-item { display:flex; align-items:center; gap:10px; padding:12px 13px; background:var(--surface2); border-radius:12px; margin-bottom:8px; border:1px solid var(--border); }
+  .reminder-icon { font-size:20px; }
+  .reminder-info { flex:1; min-width:0; }
+  .reminder-title { font-size:14px; font-weight:600; }
+  .tag-couple { background:rgba(244,63,94,0.2); color:#fb7185; }
+  .tag-family { background:rgba(16,185,129,0.2); color:#6ee7b7; }
+  .tag-work { background:rgba(99,102,241,0.2); color:var(--accent2); }
+  .tag-friends { background:rgba(139,92,246,0.2); color:#c4b5fd; }
+  .tag-personal { background:rgba(245,158,11,0.2); color:var(--gold); }
+
+  /* ── STATS ── */
+  .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px; }
+  .stat-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .stat-number { font-size:30px; font-weight:900; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .stat-label { font-size:11px; color:var(--muted); margin-top:3px; }
+  .progress-bar { height:7px; background:var(--border); border-radius:4px; overflow:hidden; margin-top:8px; }
+  .progress-fill { height:100%; background:linear-gradient(to right,var(--accent),var(--accent2)); border-radius:4px; transition:width 0.5s ease; }
+
+  /* ── GROWTH ── */
+  .growth-item { display:flex; align-items:center; gap:10px; padding:13px; background:var(--surface2); border-radius:12px; margin-bottom:8px; cursor:pointer; border:1px solid var(--border); transition:border-color 0.2s; }
+  .growth-item:active { border-color:var(--accent); }
+  .growth-icon { font-size:22px; }
+  .growth-text { flex:1; }
+  .growth-title { font-size:14px; font-weight:600; }
+  .growth-desc { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  /* ── MEDITATION ── */
+  .meditation-ring { width:110px; height:110px; border-radius:50%; border:3px solid var(--border); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; position:relative; font-size:26px; font-weight:700; color:var(--accent2); }
+  .meditation-ring svg { position:absolute; inset:-3px; width:calc(100% + 6px); height:calc(100% + 6px); }
+  .meditation-ring svg circle { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; transform:rotate(-90deg); transform-origin:center; transition:stroke-dashoffset 1s linear; }
+
+  /* ── REVIEW ── */
+  .review-section { background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(167,139,250,0.05)); border:1px solid rgba(99,102,241,0.3); border-radius:16px; padding:20px; margin-bottom:14px; }
+  .review-title { font-family:'Frank Ruhl Libre',serif; font-size:19px; margin-bottom:10px; color:var(--accent2); }
+
+  /* ── GRATITUDE BOX ── */
+  .gratitude-box { background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(251,191,36,0.05)); border:1px solid rgba(245,158,11,0.3); border-radius:16px; padding:18px; margin-bottom:14px; text-align:center; }
+  .gratitude-quote { font-family:'Frank Ruhl Libre',serif; font-size:17px; color:var(--gold); margin-bottom:12px; line-height:1.5; }
+
+  /* ── SECTION DIVIDER ── */
+  .section-divider { display:flex; align-items:center; gap:10px; margin:18px 0 10px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
+  .section-divider::before,.section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* ── STREAK ── */
+  .streak-display { display:flex; align-items:center; gap:12px; padding:14px; background:var(--surface2); border-radius:12px; margin-bottom:10px; }
+  .streak-count { font-size:30px; font-weight:900; color:var(--gold); }
+  .streak-text { font-size:12px; color:var(--muted); }
+
+  /* ── REPORT ── */
+  .report-section { border-radius:12px; padding:14px; margin-bottom:10px; }
+  .report-good { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); }
+  .report-improve { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); }
+  .report-section h4 { font-size:14px; font-weight:700; margin-bottom:8px; }
+  .report-section li { font-size:13px; padding:3px 0; list-style:none; }
+
+  /* ── VOICE FAB ── */
+  .voice-fab { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:100; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .voice-btn { width:68px; height:68px; border-radius:50%; border:none; background:linear-gradient(135deg,var(--accent),var(--accent2)); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:0 0 28px var(--glow),0 8px 28px rgba(0,0,0,0.5); transition:all 0.3s; }
+  .voice-btn.listening { animation:pulse-ring 1.5s infinite; background:linear-gradient(135deg,#ef4444,#f59e0b); }
+  @keyframes pulse-ring { 0%{box-shadow:0 0 0 0 rgba(239,68,68,0.6),0 8px 28px rgba(0,0,0,0.5);} 70%{box-shadow:0 0 0 18px rgba(239,68,68,0),0 8px 28px rgba(0,0,0,0.5);} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0),0 8px 28px rgba(0,0,0,0.5);} }
+  .voice-label { font-size:11px; color:var(--muted); }
+
+  /* ── TRANSCRIPT ── */
+  .transcript-bar { position:fixed; bottom:108px; left:50%; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:9px 18px; max-width:480px; width:88%; font-size:13px; color:var(--accent2); text-align:center; z-index:99; display:none; }
+  .transcript-bar.active { display:block; }
+
+  /* ── MODALS ── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:none; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px); }
+  .modal-overlay.active { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto; }
+  .modal-title { font-size:17px; font-weight:700; margin-bottom:18px; }
+  .modal-actions { display:flex; gap:8px; margin-top:18px; }
+  .modal-actions .btn { flex:1; }
+
+  /* ── NOTIFICATION ── */
+  .notification { position:fixed; top:16px; left:50%; transform:translateX(-50%) translateY(-100px); background:var(--surface2); border:1px solid var(--accent); border-radius:12px; padding:11px 18px; font-size:14px; color:var(--accent2); z-index:300; transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1); white-space:nowrap; max-width:88vw; text-align:center; }
+  .notification.show { transform:translateX(-50%) translateY(0); }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { text-align:center; padding:36px 20px; color:var(--muted); }
+  .empty-state .empty-icon { font-size:44px; margin-bottom:10px; }
+  .empty-state p { font-size:14px; }
+
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+</style>
+</head>
+<body>
+
+<!-- PWA Install Banner -->
+<div class="install-banner" id="installBanner">
+  <span>📲 התקן כאפליקציה על הפלאפון!</span>
+  <button class="install-btn-yes" onclick="installPWA()">התקן</button>
+  <button class="install-btn-no" onclick="dismissInstall()">✕</button>
+</div>
+
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="header-title">✦ עוזר אישי</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="headerGreeting">שלום!</div>
+    </div>
+    <div class="header-right">
+      <div class="date-display">
+        <strong id="currentTime">00:00</strong>
+        <span id="currentDate"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup/Restore Bar -->
+  <div class="backup-bar">
+    <button onclick="exportData()">📤 גבה נתונים</button>
+    <button onclick="document.getElementById('importFile').click()">📥 שחזר נתונים</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('today',this)"><span class="tab-icon">📅</span>היום</button>
+    <button class="tab" onclick="switchTab('tasks',this)"><span class="tab-icon">✅</span>משימות</button>
+    <button class="tab" onclick="switchTab('schedule',this)"><span class="tab-icon">🗓️</span>לוז</button>
+    <button class="tab" onclick="switchTab('reminders',this)"><span class="tab-icon">🔔</span>תזכורות</button>
+    <button class="tab" onclick="switchTab('growth',this)"><span class="tab-icon">🌱</span>צמיחה</button>
+    <button class="tab" onclick="switchTab('report',this)"><span class="tab-icon">📊</span>דוח</button>
+  </div>
+
+  <!-- TODAY PANEL -->
+  <div id="panel-today" class="panel active">
+    <div class="gratitude-box">
+      <div class="gratitude-quote" id="dailyQuote">טוען...</div>
+      <button class="btn btn-gold btn-sm" onclick="openModal('gratitudeModal')">🙏 הכרת תודה בוקר</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number" id="statDone">0</div>
+        <div class="stat-label">הושלמו</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card"><div class="stat-number" id="statTotal">0</div><div class="stat-label">סה"כ משימות</div></div>
+      <div class="stat-card"><div class="stat-number" id="statGrowth">0</div><div class="stat-label">מעשים טובים 🌟</div></div>
+      <div class="stat-card"><div class="stat-number" id="statStreak">0</div><div class="stat-label">ימי רצף 🔥</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔔 תזכורות השבוע</div>
+      <div id="todayReminders"><div class="empty-state"><div class="empty-icon">😌</div><p>אין תזכורות דחופות</p></div></div>
+    </div>
+    <div class="review-section" id="eveningReview" style="display:none;">
+      <div class="review-title">🌙 סיכום יום</div>
+      <div style="font-size:14px;line-height:1.7;margin-bottom:14px;">כל הכבוד! בוא נסכם את היום ונכין את מחר.</div>
+      <button class="btn btn-primary" onclick="openModal('eveningModal')">כתוב סיכום יום</button>
+    </div>
+    <div class="review-section" id="weeklyReviewPrompt" style="display:none;">
+      <div class="review-title">📅 שבת — סיכום שבועי</div>
+      <div style="font-size:14px;margin-bottom:14px;">שבת שלום! הגיע הזמן לסכם את השבוע ולתכנן את הבא.</div>
+      <button class="btn btn-primary" onclick="openModal('weeklyModal')">התחל סיכום שבועי</button>
+    </div>
+  </div>
+
+  <!-- TASKS PANEL -->
+  <div id="panel-tasks" class="panel">
+    <div class="card">
+      <div class="card-title">➕ משימה חדשה</div>
+      <div class="form-row"><input type="text" id="taskName" placeholder="שם המשימה..." /></div>
+      <div class="form-grid">
+        <div><label class="form-label">זמן מוערך (דק')</label><input type="text" id="taskDuration" placeholder="30" /></div>
+        <div><label class="form-label">עדיפות</label>
+          <select id="taskPriority"><option value="high">🔴 גבוהה</option><option value="medium" selected>🟡 בינונית</option><option value="low">🟢 נמוכה</option></select>
+        </div>
+        <div><label class="form-label">קטגוריה</label>
+          <select id="taskCategory"><option>עבודה</option><option>משפחה</option><option>אישי</option><option>בריאות</option><option>כספים</option><option>אחר</option></select>
+        </div>
+        <div><label class="form-label">תאריך יעד</label><input type="date" id="taskDate" /></div>
+      </div>
+      <button class="btn btn-primary" onclick="addTask()" style="width:100%;">הוסף משימה</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="btn btn-sm" style="background:var(--surface2);" onclick="filterTasks('all')">הכל</button>
+      <button class="btn btn-sm" style="background:var(--surface2);" onclick="filterTasks('pending')">ממתינות</button>
+      <button class="btn btn-sm" style="background:var(--surface2);" onclick="filterTasks('done')">הושלמו</button>
+      <button class="btn btn-sm btn-gold" onclick="filterTasks('high')">🔴 דחוף</button>
+    </div>
+    <div id="taskList"><div class="empty-state"><div class="empty-icon">📝</div><p>הוסף את המשימה הראשונה!</p></div></div>
+  </div>
+
+  <!-- SCHEDULE PANEL -->
+  <div id="panel-schedule" class="panel">
+    <div class="card">
+      <div class="card-title">⏰ הגדר לוח זמנים</div>
+      <div class="form-row"><input type="text" id="scheduleTask" placeholder="שם הפעילות..." /></div>
+      <div class="form-grid">
+        <div><label class="form-label">שעת התחלה</label><input type="time" id="scheduleStart" /></div>
+        <div><label class="form-label">שעת סיום</label><input type="time" id="scheduleEnd" /></div>
+      </div>
+      <div class="form-row"><label class="form-label">הפסקה אחרי (דקות)</label><input type="text" id="scheduleBreak" placeholder="0 = ללא הפסקה" /></div>
+      <button class="btn btn-primary" onclick="addScheduleItem()" style="width:100%;">הוסף ללוח</button>
+    </div>
+    <div class="section-divider">לוח זמנים היום</div>
+    <div id="scheduleList"><div class="empty-state"><div class="empty-icon">⏳</div><p>לוח הזמנים ריק</p></div></div>
+  </div>
+
+  <!-- REMINDERS PANEL -->
+  <div id="panel-reminders" class="panel">
+    <div class="card">
+      <div class="card-title">🔔 תזכורת חדשה</div>
+      <div class="form-row"><input type="text" id="reminderTitle" placeholder="תיאור התזכורת..." /></div>
+      <div class="form-grid">
+        <div><label class="form-label">תאריך</label><input type="date" id="reminderDate" /></div>
+        <div><label class="form-label">קטגוריה</label>
+          <select id="reminderType">
+            <option value="couple">💑 זוגיות</option>
+            <option value="family">👨‍👩‍👧 ילדים/משפחה</option>
+            <option value="work">💼 עבודה/פגישות</option>
+            <option value="friends">👥 חברים</option>
+            <option value="personal">⭐ אישי</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">תדירות</label>
+        <select id="reminderRecurrence">
+          <option value="once">פעם אחת</option>
+          <option value="weekly">כל שבוע</option>
+          <option value="monthly">כל חודש</option>
+          <option value="yearly">כל שנה</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="addReminder()" style="width:100%;">הוסף תזכורת</button>
+    </div>
+    <div class="section-divider">כל התזכורות</div>
+    <div id="reminderList"><div class="empty-state"><div class="empty-icon">💭</div><p>הוסף תזכורות חשובות</p></div></div>
+  </div>
+
+  <!-- GROWTH PANEL -->
+  <div id="panel-growth" class="panel">
+    <!-- Meditation -->
+    <div class="card">
+      <div class="card-title">🧘 מדיטציה ודמיון מודרך</div>
+      <div style="text-align:center;padding:8px 0;">
+        <div class="meditation-ring">
+          <svg viewBox="0 0 116 116"><circle cx="58" cy="58" r="55" id="medCircle" stroke-dasharray="346" stroke-dashoffset="346"/></svg>
+          <span id="medTimer">5:00</span>
+        </div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:10px;" id="medText">בחר משך זמן</div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:12px;">
+          <button class="btn btn-sm" style="background:var(--surface2);" onclick="setMedTime(5)">5 דק'</button>
+          <button class="btn btn-sm" style="background:var(--surface2);" onclick="setMedTime(10)">10 דק'</button>
+          <button class="btn btn-sm" style="background:var(--surface2);" onclick="setMedTime(15)">15 דק'</button>
+          <button class="btn btn-sm" style="background:var(--surface2);" onclick="setMedTime(20)">20 דק'</button>
+        </div>
+        <button class="btn btn-primary" id="medBtn" onclick="toggleMeditation()">▶ התחל מדיטציה</button>
+      </div>
+    </div>
+
+    <!-- Daily good deed -->
+    <div class="card">
+      <div class="card-title">🌟 מעשה טוב יומי</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">לפחות פעולה אחת טובה ביום — לא למידה, אלא מעשה!</div>
+      <div id="dailyGoodDeeds">
+        <div class="growth-item" onclick="toggleGoodDeed(0)"><span class="growth-icon">😊</span><div class="growth-text"><div class="growth-title">הקשבת לאחד בסביבתך</div><div class="growth-desc">תשומת לב מלאה למישהו שצריך</div></div><span id="deed-0">⬜</span></div>
+        <div class="growth-item" onclick="toggleGoodDeed(1)"><span class="growth-icon">🤗</span><div class="growth-text"><div class="growth-title">עשית טוב לאחר</div><div class="growth-desc">פעולה קטנה שעזרה למישהו</div></div><span id="deed-1">⬜</span></div>
+        <div class="growth-item" onclick="toggleGoodDeed(2)"><span class="growth-icon">💪</span><div class="growth-text"><div class="growth-title">אמרת משהו מעצים</div><div class="growth-desc">מחמאה, עידוד, הכרת תודה</div></div><span id="deed-2">⬜</span></div>
+      </div>
+      <div style="margin-top:10px;">
+        <input type="text" id="customDeed" placeholder="הוסף מעשה טוב משלך..." />
+        <button class="btn btn-success" onclick="addCustomDeed()" style="width:100%;margin-top:8px;">✨ הוסף ואשר</button>
+      </div>
+    </div>
+
+    <!-- Weekly contribution -->
+    <div class="card">
+      <div class="card-title">🌍 תרומה שבועית לסביבה/חברה</div>
+      <div class="streak-display">
+        <span style="font-size:34px;">🔥</span>
+        <div><div class="streak-count" id="contribStreak">0</div><div class="streak-text">שבועות רצף של תרומה</div></div>
+      </div>
+      <div id="weeklyContributions">
+        <div class="growth-item" onclick="toggleContrib(0)"><span class="growth-icon">♻️</span><div class="growth-text"><div class="growth-title">מחזור / הפחתת פסולת</div></div><span id="contrib-0">⬜</span></div>
+        <div class="growth-item" onclick="toggleContrib(1)"><span class="growth-icon">🤝</span><div class="growth-text"><div class="growth-title">התנדבות / עזרה לקהילה</div></div><span id="contrib-1">⬜</span></div>
+        <div class="growth-item" onclick="toggleContrib(2)"><span class="growth-icon">🌱</span><div class="growth-text"><div class="growth-title">פעולה לסביבה</div></div><span id="contrib-2">⬜</span></div>
+      </div>
+      <div style="margin-top:10px;">
+        <input type="text" id="customContrib" placeholder="תרומה שבועית משלך..." />
+        <button class="btn btn-success" onclick="addCustomContrib()" style="width:100%;margin-top:8px;">🌍 הוסף תרומה</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPORT PANEL -->
+  <div id="panel-report" class="panel">
+    <div class="card">
+      <div class="card-title">📊 דוח שבועי</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-number" id="reportCompleted">-</div><div class="stat-label">משימות הושלמו</div></div>
+        <div class="stat-card"><div class="stat-number" id="reportEfficiency">-</div><div class="stat-label">יעילות %</div></div>
+        <div class="stat-card"><div class="stat-number" id="reportDeeds">-</div><div class="stat-label">מעשים טובים</div></div>
+        <div class="stat-card"><div class="stat-number" id="reportContribs">-</div><div class="stat-label">תרומות</div></div>
+      </div>
+      <div class="report-section report-good"><h4>✅ מה הלך טוב השבוע</h4><ul id="reportGood"></ul></div>
+      <div class="report-section report-improve"><h4>💡 אזורים לשיפור</h4><ul id="reportImprove"></ul></div>
+      <div class="card" style="background:var(--surface2);margin-top:12px;">
+        <div class="card-title" style="font-size:14px;">📝 הרהורים שבועיים</div>
+        <textarea id="weeklyNotes" placeholder="תובנות לשבוע שעבר ומטרות לשבוע הבא..."></textarea>
+        <button class="btn btn-primary" onclick="saveNotes()" style="width:100%;margin-top:8px;">שמור</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Voice FAB -->
+<div class="voice-fab">
+  <div class="transcript-bar" id="transcriptBar">מאזין...</div>
+  <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎤</button>
+  <div class="voice-label" id="voiceLabel">לחץ לדיבור</div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<!-- Gratitude Modal -->
+<div class="modal-overlay" id="gratitudeModal">
+  <div class="modal">
+    <div class="modal-title">🙏 הכרת תודה — בוקר טוב</div>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:14px;">קח רגע לנשום... על מה אתה אסיר תודה הבוקר?</p>
+    <div class="form-row"><textarea id="gratitudeText" placeholder="3 דברים שאני אסיר תודה עליהם..." style="height:110px;"></textarea></div>
+    <div class="form-row">
+      <label class="form-label">✨ כוונה ליום</label>
+      <input type="text" id="intentionText" placeholder="הכוונה שלי ליום זה..." />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gold" onclick="saveGratitude()">שמור ✨</button>
+      <button class="btn" style="background:var(--surface2);" onclick="closeModal('gratitudeModal')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<!-- Evening Modal -->
+<div class="modal-overlay" id="eveningModal">
+  <div class="modal">
+    <div class="modal-title">🌙 סיכום יום — לקראת מחר</div>
+    <div class="form-row"><label class="form-label">🌟 הרגע הטוב ביום</label><input type="text" id="eveningBest" placeholder="מה היה הכי טוב?" /></div>
+    <div class="form-row"><label class="form-label">🔧 מה אשפר מחר?</label><input type="text" id="eveningImprove" placeholder="מה אפשר לשפר?" /></div>
+    <div class="form-row"><label class="form-label">📌 3 משימות לתחילת מחר</label><textarea id="eveningTomorrow" placeholder="המשימות הכי חשובות למחר..." style="height:80px;"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEveningReview()">שמור 🌙</button>
+      <button class="btn" style="background:var(--surface2);" onclick="closeModal('eveningModal')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<!-- Weekly Modal -->
+<div class="modal-overlay" id="weeklyModal">
+  <div class="modal">
+    <div class="modal-title">📅 סיכום שבועי</div>
+    <div class="form-row"><label class="form-label">🎯 מה השגתי השבוע?</label><textarea id="weeklyAchieve" style="height:70px;" placeholder="הישגים מרכזיים..."></textarea></div>
+    <div class="form-row"><label class="form-label">💡 מה למדתי על עצמי?</label><textarea id="weeklyLearn" style="height:70px;" placeholder="תובנות אישיות..."></textarea></div>
+    <div class="form-row"><label class="form-label">🚀 3 מטרות לשבוע הבא</label><textarea id="weeklyGoals" style="height:70px;" placeholder="מטרות לשבוע הבא..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveWeeklyReview()">שמור 📅</button>
+      <button class="btn" style="background:var(--surface2);" onclick="closeModal('weeklyModal')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════════
+let data = JSON.parse(localStorage.getItem('pa2') || '{}');
+const DEF = { tasks:[], schedule:[], reminders:[], deedsDone:[], contribsDone:[], streak:0, contribStreak:0, lastDay:'', weeklyNotes:'' };
+Object.keys(DEF).forEach(k => { if (data[k] == null) data[k] = DEF[k]; });
+function save() { localStorage.setItem('pa2', JSON.stringify(data)); }
+
+// ══════════════════════════════════════════
+//  PWA
+// ══════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!localStorage.getItem('pwaInstallDismissed')) {
+    document.getElementById('installBanner').classList.add('show');
+  }
+});
+function installPWA() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      document.getElementById('installBanner').classList.remove('show');
+    });
+  }
+}
+function dismissInstall() {
+  localStorage.setItem('pwaInstallDismissed', '1');
+  document.getElementById('installBanner').classList.remove('show');
+}
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+// ══════════════════════════════════════════
+//  EXPORT / IMPORT
+// ══════════════════════════════════════════
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `עוזר-אישי-גיבוי-${d}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('📤 הנתונים גובו בהצלחה!');
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (imported.tasks !== undefined) {
+        data = { ...DEF, ...imported };
+        save();
+        renderAll();
+        notify('📥 הנתונים שוחזרו בהצלחה!');
+      } else {
+        notify('⚠️ קובץ לא תקין');
+      }
+    } catch { notify('⚠️ שגיאה בקריאת הקובץ'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ══════════════════════════════════════════
+//  INIT & CLOCK
+// ══════════════════════════════════════════
+const QUOTES = [
+  '"היום הוא מתנה — לכן הוא נקרא ״הווה״"',
+  '"כל מסע מתחיל בצעד אחד"',
+  '"מה שאתה מתמקד בו — מתרחב"',
+  '"הצלחה היא סכום של מאמצים קטנים, יום-יום"',
+  '"בכל יום יש הזדמנות להיות גרסה טובה יותר"',
+  '"הכרת תודה היא הדרך הקצרה ביותר לאושר"',
+  '"אל תדחה להיות טוב"',
+];
+
+function init() {
+  updateClock();
+  setInterval(updateClock, 1000);
+  setDailyQuote();
+  checkDailyReset();
+  renderAll();
+}
+
+function updateClock() {
+  const now = new Date();
+  const hh = now.getHours().toString().padStart(2,'0');
+  const mm = now.getMinutes().toString().padStart(2,'0');
+  document.getElementById('currentTime').textContent = hh + ':' + mm;
+
+  const days = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  document.getElementById('currentDate').textContent = `יום ${days[now.getDay()]} | ${now.getDate()} ${months[now.getMonth()]}`;
+
+  const h = now.getHours();
+  document.getElementById('headerGreeting').textContent =
+    h < 12 ? '☀️ בוקר טוב!' : h < 17 ? '🌤️ צהריים טובים!' : h < 21 ? '🌅 ערב טוב!' : '🌙 לילה טוב!';
+
+  // Evening review
+  const er = document.getElementById('eveningReview');
+  if (er) er.style.display = h >= 21 ? 'block' : 'none';
+
+  // Weekly review (Saturday = 6)
+  const wr = document.getElementById('weeklyReviewPrompt');
+  if (wr) wr.style.display = now.getDay() === 6 ? 'block' : 'none';
+}
+
+function setDailyQuote() {
+  document.getElementById('dailyQuote').textContent = QUOTES[new Date().getDay() % QUOTES.length];
+}
+
+function checkDailyReset() {
+  const today = new Date().toDateString();
+  if (data.lastDay !== today) {
+    data.lastDay = today;
+    data.deedsDone = [];
+    save();
+  }
+}
+
+// ══════════════════════════════════════════
+//  RENDER ALL
+// ══════════════════════════════════════════
+function renderAll() {
+  renderTasks();
+  renderSchedule();
+  renderReminders();
+  renderTodayStats();
+  renderTodayReminders();
+  renderReport();
+  renderDeedsState();
+  renderContribState();
+  if (data.weeklyNotes) document.getElementById('weeklyNotes').value = data.weeklyNotes;
+}
+
+// ══════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+//  TASKS
+// ══════════════════════════════════════════
+let taskFilter = 'all';
+
+function addTask() {
+  const name = document.getElementById('taskName').value.trim();
+  if (!name) { notify('הכנס שם למשימה'); return; }
+  data.tasks.unshift({
+    id: Date.now(), name,
+    duration: document.getElementById('taskDuration').value || '?',
+    priority: document.getElementById('taskPriority').value,
+    category: document.getElementById('taskCategory').value,
+    date: document.getElementById('taskDate').value || new Date().toISOString().split('T')[0],
+    done: false
+  });
+  save(); renderTasks(); renderTodayStats();
+  document.getElementById('taskName').value = '';
+  document.getElementById('taskDuration').value = '';
+  notify('✅ משימה נוספה!');
+}
+
+function toggleTask(id) {
+  const t = data.tasks.find(t => t.id === id);
+  if (t) { t.done = !t.done; save(); renderTasks(); renderTodayStats(); if (t.done) notify('🎉 כל הכבוד!'); }
+}
+
+function deleteTask(id) { data.tasks = data.tasks.filter(t => t.id !== id); save(); renderTasks(); renderTodayStats(); }
+function filterTasks(f) { taskFilter = f; renderTasks(); }
+
+function renderTasks() {
+  const list = document.getElementById('taskList');
+  let tasks = [...data.tasks];
+  if (taskFilter === 'pending') tasks = tasks.filter(t => !t.done);
+  else if (taskFilter === 'done') tasks = tasks.filter(t => t.done);
+  else if (taskFilter === 'high') tasks = tasks.filter(t => t.priority === 'high');
+  const po = { high:0, medium:1, low:2 };
+  tasks.sort((a,b) => { if (a.done !== b.done) return a.done ? 1 : -1; return po[a.priority]-po[b.priority]; });
+  if (!tasks.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">✨</div><p>אין משימות להציג</p></div>'; return; }
+  list.innerHTML = tasks.map(t => `
+    <div class="task-item priority-${t.priority} ${t.done?'done':''}">
+      <div class="task-check ${t.done?'checked':''}" onclick="toggleTask(${t.id})">${t.done?'✓':''}</div>
+      <div class="task-info">
+        <div class="task-name">${t.name}</div>
+        <div class="task-meta">
+          <span class="badge badge-purple">⏱️ ${t.duration} דק'</span>
+          <span class="badge badge-gold">📁 ${t.category}</span>
+          ${t.date ? `<span class="badge" style="background:var(--surface);color:var(--muted)">📅 ${t.date}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask(${t.id})">🗑️</button>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  SCHEDULE
+// ══════════════════════════════════════════
+function addScheduleItem() {
+  const name = document.getElementById('scheduleTask').value.trim();
+  const start = document.getElementById('scheduleStart').value;
+  if (!name || !start) { notify('מלא שם ושעת התחלה'); return; }
+  data.schedule.push({ id: Date.now(), name, start, end: document.getElementById('scheduleEnd').value || '', breakAfter: document.getElementById('scheduleBreak').value || 0 });
+  data.schedule.sort((a,b) => a.start.localeCompare(b.start));
+  save(); renderSchedule();
+  document.getElementById('scheduleTask').value = '';
+  document.getElementById('scheduleStart').value = '';
+  document.getElementById('scheduleEnd').value = '';
+  document.getElementById('scheduleBreak').value = '';
+  notify('⏰ נוסף ללוח הזמנים!');
+}
+function deleteScheduleItem(id) { data.schedule = data.schedule.filter(s => s.id !== id); save(); renderSchedule(); }
+
+function renderSchedule() {
+  const list = document.getElementById('scheduleList');
+  if (!data.schedule.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>לוח הזמנים ריק</p></div>'; return; }
+  const now = new Date(); const nowMin = now.getHours()*60+now.getMinutes();
+  list.innerHTML = data.schedule.map(s => {
+    const [sh,sm] = s.start.split(':').map(Number);
+    const isCurrent = s.end ? (() => { const [eh,em]=s.end.split(':').map(Number); return nowMin>=sh*60+sm && nowMin<=eh*60+em; })() : false;
+    return `<div class="schedule-slot" style="${isCurrent?'border:1px solid var(--accent);box-shadow:0 0 10px var(--glow);':''}">
+      <div class="slot-time"><div>${s.start}</div>${s.end?`<div style="color:var(--muted)">↓${s.end}</div>`:''}</div>
+      <div class="slot-bar"></div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${isCurrent?'🟢 ':''}${s.name}</div>
+        ${s.breakAfter>0?`<div style="font-size:12px;color:var(--gold);">☕ הפסקה ${s.breakAfter} דק'</div>`:''}
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteScheduleItem(${s.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  REMINDERS
+// ══════════════════════════════════════════
+const RICONS = { couple:'💑', family:'👨‍👩‍👧', work:'💼', friends:'👥', personal:'⭐' };
+const RTAGS  = { couple:'tag-couple', family:'tag-family', work:'tag-work', friends:'tag-friends', personal:'tag-personal' };
+
+function getDaysUntil(d) {
+  if (!d) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tgt = new Date(d); tgt.setHours(0,0,0,0);
+  return Math.round((tgt-today)/(864e5));
+}
+
+function addReminder() {
+  const title = document.getElementById('reminderTitle').value.trim();
+  if (!title) { notify('הכנס תיאור לתזכורת'); return; }
+  data.reminders.push({ id: Date.now(), title, date: document.getElementById('reminderDate').value, type: document.getElementById('reminderType').value, recurrence: document.getElementById('reminderRecurrence').value });
+  data.reminders.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  save(); renderReminders(); renderTodayReminders();
+  document.getElementById('reminderTitle').value = '';
+  document.getElementById('reminderDate').value = '';
+  notify('🔔 תזכורת נוספה!');
+}
+function deleteReminder(id) { data.reminders = data.reminders.filter(r=>r.id!==id); save(); renderReminders(); renderTodayReminders(); }
+
+function daysText(days) {
+  if (days === null) return '';
+  if (days === 0) return '<span style="color:var(--red);font-weight:700;">היום!</span>';
+  if (days === 1) return '<span style="color:var(--gold);">מחר</span>';
+  if (days > 0) return `<span style="color:var(--accent2);">בעוד ${days} ימים</span>`;
+  return `<span style="color:var(--muted);">עבר לפני ${-days} ימים</span>`;
+}
+
+function renderReminders() {
+  const list = document.getElementById('reminderList');
+  if (!data.reminders.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">💭</div><p>הוסף תזכורות חשובות</p></div>'; return; }
+  list.innerHTML = data.reminders.map(r => {
+    const days = getDaysUntil(r.date);
+    return `<div class="reminder-item">
+      <div class="reminder-icon">${RICONS[r.type]||'🔔'}</div>
+      <div class="reminder-info">
+        <div class="reminder-title">${r.title}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap;">
+          <span class="badge ${RTAGS[r.type]||'badge-purple'}">${r.type}</span>
+          ${r.date?`<span style="font-size:12px;color:var(--muted);">${r.date}</span>`:''}
+          ${daysText(days)}
+          ${r.recurrence!=='once'?`<span class="badge badge-green">${r.recurrence}</span>`:''}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteReminder(${r.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderTodayReminders() {
+  const c = document.getElementById('todayReminders');
+  const upcoming = data.reminders.filter(r => { const d=getDaysUntil(r.date); return d!==null && d>=0 && d<=7; }).slice(0,5);
+  if (!upcoming.length) { c.innerHTML = '<div class="empty-state"><div class="empty-icon">😌</div><p>אין תזכורות השבוע</p></div>'; return; }
+  c.innerHTML = upcoming.map(r => {
+    const d = getDaysUntil(r.date);
+    return `<div class="reminder-item"><div class="reminder-icon">${RICONS[r.type]||'🔔'}</div><div class="reminder-info"><div class="reminder-title">${r.title}</div><div style="font-size:12px;color:var(--gold);margin-top:2px;">${d===0?'היום!':d===1?'מחר':`בעוד ${d} ימים`}</div></div></div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  TODAY STATS
+// ══════════════════════════════════════════
+function renderTodayStats() {
+  const today = new Date().toISOString().split('T')[0];
+  const todayTasks = data.tasks.filter(t => t.date === today || !t.date);
+  const done = todayTasks.filter(t => t.done).length;
+  const total = todayTasks.length;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('progressFill').style.width = (total>0 ? Math.round(done/total*100) : 0) + '%';
+  document.getElementById('statStreak').textContent = data.streak || 0;
+  document.getElementById('statGrowth').textContent = (data.deedsDone||[]).filter(Boolean).length;
+}
+
+// ══════════════════════════════════════════
+//  GROWTH
+// ══════════════════════════════════════════
+function renderDeedsState() {
+  for (let i=0; i<3; i++) { const el=document.getElementById('deed-'+i); if(el) el.textContent=(data.deedsDone||[])[i]?'✅':'⬜'; }
+}
+function toggleGoodDeed(i) {
+  if (!data.deedsDone) data.deedsDone=[];
+  data.deedsDone[i]=!data.deedsDone[i]; save(); renderDeedsState(); renderTodayStats();
+  if (data.deedsDone[i]) notify('🌟 מעשה טוב נרשם!');
+}
+function addCustomDeed() {
+  const val=document.getElementById('customDeed').value.trim(); if(!val) return;
+  const div=document.createElement('div'); div.className='growth-item';
+  div.innerHTML=`<span class="growth-icon">✨</span><div class="growth-text"><div class="growth-title">${val}</div></div><span>✅</span>`;
+  document.getElementById('dailyGoodDeeds').appendChild(div);
+  document.getElementById('customDeed').value='';
+  if(!data.deedsDone) data.deedsDone=[];
+  data.deedsDone.push(true); save(); renderTodayStats();
+  notify('✨ מעשה טוב נרשם!');
+}
+
+function renderContribState() {
+  for (let i=0; i<3; i++) { const el=document.getElementById('contrib-'+i); if(el) el.textContent=(data.contribsDone||[])[i]?'✅':'⬜'; }
+  document.getElementById('contribStreak').textContent = data.contribStreak||0;
+}
+function toggleContrib(i) {
+  if(!data.contribsDone) data.contribsDone=[];
+  data.contribsDone[i]=!data.contribsDone[i]; save(); renderContribState();
+  if(data.contribsDone[i]) notify('🌍 תרומה נרשמה!');
+}
+function addCustomContrib() {
+  const val=document.getElementById('customContrib').value.trim(); if(!val) return;
+  const div=document.createElement('div'); div.className='growth-item';
+  div.innerHTML=`<span class="growth-icon">🌟</span><div class="growth-text"><div class="growth-title">${val}</div></div><span>✅</span>`;
+  document.getElementById('weeklyContributions').appendChild(div);
+  document.getElementById('customContrib').value='';
+  notify('🌍 תרומה נרשמה!');
+}
+
+// ══════════════════════════════════════════
+//  MEDITATION
+// ══════════════════════════════════════════
+let medSec=300, medTotal=300, medInt=null, medOn=false;
+function setMedTime(m) { if(medOn) return; medSec=medTotal=m*60; updateMedDisplay(); }
+function toggleMeditation() {
+  if (medOn) {
+    clearInterval(medInt); medOn=false;
+    document.getElementById('medBtn').textContent='▶ המשך';
+    document.getElementById('medText').textContent='מושהה';
+  } else {
+    medOn=true;
+    document.getElementById('medBtn').textContent='⏸ השהה';
+    document.getElementById('medText').textContent='נשום... הרגע...';
+    medInt=setInterval(()=>{ medSec--; updateMedDisplay(); if(medSec<=0){ clearInterval(medInt); medOn=false; document.getElementById('medBtn').textContent='▶ מדיטציה חדשה'; document.getElementById('medText').textContent='🙏 סיימת! כל הכבוד'; notify('🧘 מדיטציה הושלמה!'); } },1000);
+  }
+}
+function updateMedDisplay() {
+  const m=Math.floor(medSec/60), s=medSec%60;
+  document.getElementById('medTimer').textContent=`${m}:${s.toString().padStart(2,'0')}`;
+  document.getElementById('medCircle').style.strokeDashoffset = 346*(1-(medTotal-medSec)/medTotal);
+}
+
+// ══════════════════════════════════════════
+//  REPORT
+// ══════════════════════════════════════════
+function renderReport() {
+  const done=data.tasks.filter(t=>t.done).length, total=data.tasks.length;
+  const eff=total>0?Math.round(done/total*100):0;
+  const deeds=(data.deedsDone||[]).filter(Boolean).length;
+  const contribs=(data.contribsDone||[]).filter(Boolean).length;
+  document.getElementById('reportCompleted').textContent=done;
+  document.getElementById('reportEfficiency').textContent=eff+'%';
+  document.getElementById('reportDeeds').textContent=deeds;
+  document.getElementById('reportContribs').textContent=contribs;
+  const goods=[], imps=[];
+  if(eff>=80) goods.push('יעילות גבוהה מ-80% במשימות! 🎯'); else imps.push('שאפו לסיים לפחות 80% מהמשימות');
+  if(deeds>=3) goods.push('ביצעת מעשים טובים! 🌟'); else imps.push('נסה להגיע ל-3+ מעשים טובים ביום');
+  if(contribs>=1) goods.push('תרמת לסביבה/חברה השבוע! 🌍'); else imps.push('השבוע עדיין לא רשמת תרומה לסביבה');
+  if(data.schedule.length>0) goods.push('יש לך לוח זמנים מסודר ✅'); else imps.push('הוסף לוח זמנים יומי');
+  if(data.reminders.length>0) goods.push('יש לך תזכורות חשובות 🔔'); else imps.push('הוסף תזכורות לאירועים חשובים');
+  document.getElementById('reportGood').innerHTML=goods.map(g=>`<li>✅ ${g}</li>`).join('');
+  document.getElementById('reportImprove').innerHTML=imps.map(i=>`<li>💡 ${i}</li>`).join('');
+}
+function saveNotes() { data.weeklyNotes=document.getElementById('weeklyNotes').value; save(); notify('📝 נשמר!'); }
+
+// ══════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function saveGratitude() {
+  data.gratitude={ text:document.getElementById('gratitudeText').value, intention:document.getElementById('intentionText').value, date:new Date().toDateString() };
+  save(); notify('🙏 הכרת תודה נשמרה!'); closeModal('gratitudeModal');
+}
+function saveEveningReview() {
+  data.eveningReview={ best:document.getElementById('eveningBest').value, improve:document.getElementById('eveningImprove').value, tomorrow:document.getElementById('eveningTomorrow').value, date:new Date().toDateString() };
+  save(); notify('🌙 סיכום יום נשמר!'); closeModal('eveningModal');
+}
+function saveWeeklyReview() {
+  data.weeklyReview={ achieve:document.getElementById('weeklyAchieve').value, learn:document.getElementById('weeklyLearn').value, goals:document.getElementById('weeklyGoals').value, date:new Date().toDateString() };
+  save(); notify('📅 סיכום שבועי נשמר!'); closeModal('weeklyModal');
+}
+
+// ══════════════════════════════════════════
+//  VOICE (Android Chrome)
+// ══════════════════════════════════════════
+let recognition=null, listening=false;
+
+function toggleVoice() {
+  const hasSR = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+  if (!hasSR) { notify('זיהוי קול זמין ב-Chrome בלבד'); return; }
+  listening ? stopVoice() : startVoice();
+}
+
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'he-IL';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    listening=true;
+    document.getElementById('voiceBtn').classList.add('listening');
+    document.getElementById('voiceBtn').textContent='🔴';
+    document.getElementById('voiceLabel').textContent='מאזין...';
+    document.getElementById('transcriptBar').classList.add('active');
+    document.getElementById('transcriptBar').textContent='🎤 מאזין...';
+  };
+
+  recognition.onresult = e => {
+    let t=''; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript;
+    document.getElementById('transcriptBar').textContent=t;
+    if (e.results[e.results.length-1].isFinal) processVoice(t);
+  };
+
+  recognition.onend = () => stopVoice();
+  recognition.onerror = () => { stopVoice(); notify('שגיאה — נסה שוב'); };
+  recognition.start();
+}
+
+function stopVoice() {
+  listening=false; if(recognition) recognition.stop();
+  document.getElementById('voiceBtn').classList.remove('listening');
+  document.getElementById('voiceBtn').textContent='🎤';
+  document.getElementById('voiceLabel').textContent='לחץ לדיבור';
+  setTimeout(()=>document.getElementById('transcriptBar').classList.remove('active'), 2500);
+}
+
+function processVoice(text) {
+  const t=text.toLowerCase().trim();
+  document.getElementById('transcriptBar').textContent=`"${text}"`;
+
+  if (t.includes('הוסף משימה') || t.includes('משימה חדשה')) {
+    const name=t.replace('הוסף משימה','').replace('משימה חדשה','').trim();
+    if (name) {
+      data.tasks.unshift({ id:Date.now(), name, duration:'30', priority:'medium', category:'אחר', date:new Date().toISOString().split('T')[0], done:false });
+      save(); renderTasks(); renderTodayStats();
+      notify(`✅ נוספה: "${name}"`);
+    }
+  } else if (t.includes('משימות')) {
+    document.querySelectorAll('.tab')[1].click(); notify('📋 עובר למשימות');
+  } else if (t.includes('לוח זמנים') || t.includes('לוז')) {
+    document.querySelectorAll('.tab')[2].click(); notify('⏰ עובר ללוז');
+  } else if (t.includes('תזכורת')) {
+    document.querySelectorAll('.tab')[3].click(); notify('🔔 עובר לתזכורות');
+  } else if (t.includes('מדיטציה') || t.includes('דמיון')) {
+    document.querySelectorAll('.tab')[4].click(); notify('🧘 עובר למדיטציה');
+  } else if (t.includes('דוח')) {
+    document.querySelectorAll('.tab')[5].click(); notify('📊 עובר לדוח');
+  } else if (t.includes('הכרת תודה') || t.includes('תודה')) {
+    openModal('gratitudeModal'); notify('🙏 פותח הכרת תודה');
+  } else {
+    notify(`שמעתי: "${text}"`);
+  }
+}
+
+// ══════════════════════════════════════════
+//  NOTIFICATION
+// ══════════════════════════════════════════
+function notify(msg) {
+  const el=document.getElementById('notification');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+// ══════════════════════════════════════════
+//  DEFAULT REMINDERS
+// ══════════════════════════════════════════
+if (!data.reminders.length) {
+  [{ title:'שיחה עם ההורים', type:'family', recurrence:'weekly' },
+   { title:'ערב זוגי', type:'couple', recurrence:'weekly' },
+   { title:'שמירת קשר עם חברים', type:'friends', recurrence:'monthly' }]
+  .forEach((r,i) => data.reminders.push({ id:Date.now()+i, ...r, date:'' }));
+  save();
+}
+
+// ── CLOSE MODAL ON OVERLAY CLICK ──
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
+});
+
+init();
+</script>
+</body>
+</html>
