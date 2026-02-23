@@ -990,21 +990,63 @@ function addScheduleItem() {
 }
 function deleteScheduleItem(id) { data.schedule = data.schedule.filter(s => s.id !== id); save(); renderSchedule(); }
 
-function renderSchedule() {
+async function renderSchedule() {
   const list = document.getElementById('scheduleList');
-  if (!data.schedule.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>לוח הזמנים ריק</p></div>'; return; }
-  const now = new Date(); const nowMin = now.getHours()*60+now.getMinutes();
-  list.innerHTML = data.schedule.map(s => {
-    const [sh,sm] = s.start.split(':').map(Number);
-    const isCurrent = s.end ? (() => { const [eh,em]=s.end.split(':').map(Number); return nowMin>=sh*60+sm && nowMin<=eh*60+em; })() : false;
-    return `<div class="schedule-slot" style="${isCurrent?'border:1px solid var(--accent);box-shadow:0 0 10px var(--glow);':''}">
-      <div class="slot-time"><div>${s.start}</div>${s.end?`<div style="color:var(--muted)">↓${s.end}</div>`:''}</div>
+
+  // שלוף אירועים מ-Google Calendar
+  const calEvents = await loadCalendarEvents();
+
+  // מיזוג לוז ידני + Google Calendar
+  let allItems = [];
+
+  // לוז ידני
+  data.schedule.forEach(s => {
+    allItems.push({
+      id: s.id, name: s.name, start: s.start, end: s.end || '',
+      breakAfter: s.breakAfter || 0, type: 'manual'
+    });
+  });
+
+  // Google Calendar
+  calEvents.forEach(e => {
+    const start = e.start ? new Date(e.start) : null;
+    const end = e.end ? new Date(e.end) : null;
+    const startStr = start ? `${start.getHours().toString().padStart(2,'0')}:${start.getMinutes().toString().padStart(2,'0')}` : '';
+    const endStr = end ? `${end.getHours().toString().padStart(2,'0')}:${end.getMinutes().toString().padStart(2,'0')}` : '';
+    allItems.push({
+      id: 'cal_' + e.title, name: '📅 ' + e.title,
+      start: startStr, end: endStr, breakAfter: 0, type: 'calendar',
+      location: e.location || ''
+    });
+  });
+
+  // מיין לפי שעה
+  allItems.sort((a,b) => (a.start || '').localeCompare(b.start || ''));
+
+  if (!allItems.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>לוח הזמנים ריק</p></div>';
+    return;
+  }
+
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+
+  list.innerHTML = allItems.map(s => {
+    const [sh, sm] = (s.start || '00:00').split(':').map(Number);
+    const isCurrent = s.end ? (() => {
+      const [eh, em] = s.end.split(':').map(Number);
+      return nowMin >= sh*60+sm && nowMin <= eh*60+em;
+    })() : false;
+    const isCalendar = s.type === 'calendar';
+    return `<div class="schedule-slot" style="${isCurrent ? 'border:1px solid var(--accent);box-shadow:0 0 10px var(--glow);' : ''}${isCalendar ? 'background:rgba(99,102,241,0.08);' : ''}">
+      <div class="slot-time"><div>${s.start}</div>${s.end ? `<div style="color:var(--muted)">↓${s.end}</div>` : ''}</div>
       <div class="slot-bar"></div>
       <div style="flex:1;">
-        <div style="font-size:14px;font-weight:600;">${isCurrent?'🟢 ':''}${s.name}</div>
-        ${s.breakAfter>0?`<div style="font-size:12px;color:var(--gold);">☕ הפסקה ${s.breakAfter} דק'</div>`:''}
+        <div style="font-size:14px;font-weight:600;">${isCurrent ? '🟢 ' : ''}${s.name}</div>
+        ${s.location ? `<div style="font-size:12px;color:var(--muted);">📍 ${s.location}</div>` : ''}
+        ${s.breakAfter > 0 ? `<div style="font-size:12px;color:var(--gold);">☕ הפסקה ${s.breakAfter} דק'</div>` : ''}
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteScheduleItem(${s.id})">✕</button>
+      ${!isCalendar ? `<button class="btn btn-danger btn-sm" onclick="deleteScheduleItem(${s.id})">✕</button>` : ''}
     </div>`;
   }).join('');
 }
