@@ -718,12 +718,71 @@ const QUOTES = [
   '"אל תדחה להיות טוב"',
 ];
 
+// ══════════════════════════════════════════
+//  חיבור לשרת
+// ══════════════════════════════════════════
+const SERVER_URL = 'https://personal-assistant-server-production-d594.up.railway.app';
+const VAPID_PUBLIC_KEY = 'BGNNqPpUROGAqlsbGYVOrIU1k2HAG2Jpi2SEZocLYJ_EDWwBpzPmOgWeiH6jp09ABB9zX1P98QpBeHAQFtcM5e4';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function registerPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    await fetch(SERVER_URL + '/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub)
+    });
+    console.log('✅ התראות פוש רשומות');
+  } catch (e) {
+    console.log('Push registration failed:', e);
+  }
+}
+
+async function saveGratitudeToServer(text) {
+  try {
+    await fetch(SERVER_URL + '/gratitude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, date: new Date().toISOString() })
+    });
+  } catch (e) {
+    console.log('Gratitude save failed:', e);
+  }
+}
+
+async function loadCalendarEvents() {
+  try {
+    const res = await fetch(SERVER_URL + '/calendar/today');
+    const { events } = await res.json();
+    return events || [];
+  } catch (e) {
+    return [];
+  }
+}
+
 function init() {
   updateClock();
   setInterval(updateClock, 1000);
   setDailyQuote();
   checkDailyReset();
   renderAll();
+  // רישום להתראות פוש
+  setTimeout(registerPush, 2000);
 }
 
 function updateClock() {
@@ -1122,8 +1181,14 @@ function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 function saveGratitude() {
-  data.gratitude={ text:document.getElementById('gratitudeText').value, intention:document.getElementById('intentionText').value, date:new Date().toDateString() };
-  save(); notify('🙏 הכרת תודה נשמרה!'); closeModal('gratitudeModal');
+  const text = document.getElementById('gratitudeText').value;
+  const intention = document.getElementById('intentionText').value;
+  data.gratitude = { text, intention, date: new Date().toDateString() };
+  save();
+  notify('🙏 הכרת תודה נשמרה!');
+  closeModal('gratitudeModal');
+  // שמירה גם ב-Google Sheets
+  if (text) saveGratitudeToServer(text);
 }
 function saveEveningReview() {
   data.eveningReview={ best:document.getElementById('eveningBest').value, improve:document.getElementById('eveningImprove').value, tomorrow:document.getElementById('eveningTomorrow').value, date:new Date().toDateString() };
